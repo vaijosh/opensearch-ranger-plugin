@@ -1,0 +1,332 @@
+buildscript {
+    ext {
+        opensearch_version = System.getProperty("opensearch.version", "2.18.0")
+    }
+
+    repositories {
+        mavenLocal()
+        maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
+        mavenCentral()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+
+    dependencies {
+        classpath "org.opensearch.gradle:build-tools:${opensearch_version}"
+        //classpath 'com.github.johnrengelman:shadow:8.1.1'
+        classpath "com.autonomousapps:dependency-analysis-gradle-plugin:1.30.0"
+    }
+
+    configurations.classpath.resolutionStrategy {
+        force 'org.ow2.asm:asm:9.6'
+        force 'org.ow2.asm:asm-commons:9.6'
+    }
+}
+
+// Apply the necessary plugins, including the shadow plugin for creating a fat JAR
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'eclipse'
+//apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'opensearch.opensearchplugin'
+apply plugin: 'opensearch.yaml-rest-test'
+apply plugin: 'com.autonomousapps.dependency-analysis'
+
+// Define project variables
+def pluginName = 'opensearch-ranger-plugin'
+def pluginDescription = 'Plugin for Ranger authorization and audit support'
+def pluginClassName = 'org.opensearch.plugin.RangerOpensearchPlugin'
+
+group = "org.opensearch"
+version = "2.18.0"
+
+// Java compatibility settings
+java {
+    targetCompatibility = JavaVersion.VERSION_11
+    sourceCompatibility = JavaVersion.VERSION_11
+}
+
+// OpenSearch plugin specific configuration
+opensearchplugin {
+    name pluginName
+    description pluginDescription
+    classname pluginClassName
+    licenseFile rootProject.file('LICENSE.txt')
+    noticeFile rootProject.file('NOTICE.txt')
+}
+
+// This requires an additional Jar not published as part of build-tools
+loggerUsageCheck.enabled = false
+
+// No need to validate pom, as we do not upload to maven/sonatype
+validateNebulaPom.enabled = false
+
+
+
+repositories {
+    mavenLocal()
+    maven { url "https://aws.oss.sonatype.org/content/repositories/snapshots" }
+    mavenCentral()
+    maven { url "https://plugins.gradle.org/m2/" }
+    maven {
+        url "https://repository.apache.org/content/repositories/snapshots/"
+        name "Apache Development Snapshot Repository"
+        content {
+            snapshotsOnly()
+        }
+    }
+}
+
+ext {
+    // OpenSearch
+    opensearch_version = System.getProperty("opensearch.version", "2.18.0")
+
+    // Ranger
+    ranger_version = "3.0.0-SNAPSHOT"
+
+    // Hadoop
+    hadoop_version = '3.4.0'
+    hadoop_shaded_guava_version = "1.1.1"
+
+    // Logging
+    log4j_version = "2.17.2"
+    slf4j_api_version = "2.0.13"
+    commons_logging_version = "1.3.4"
+
+    // Jackson, JSON, XML, & JAX-RS
+    fasterxml_jackson_version = "2.17.2"
+    fasterxml_woodstox_version = "6.5.1"
+    codehaus_woodstox_stax2api_version = "4.2.1"
+    gson_version = "2.10.1"
+    javax_ws_rs_version = "2.1.1"
+    jaxb_api_version = '2.3.1'
+    jaxb_impl_version = '2.3.1'
+    jettison_version = '1.5.4'
+    xerces_impl_version = '2.12.2'
+
+    // HTTP Components & Jersey
+    jersey_bundle_version = "1.19.4"
+    jetty_client_version = "9.4.56.v20240826"
+    httpcomponents_httpasyncclient_version = "4.1.5"
+    httpcomponents_httpclient_version = "4.5.13"
+    httpcomponents_httpcore_version = "4.4.14"
+    httpcomponents_httpmime_version = "4.5.13"
+
+    // Solr
+    solr_version = '9.4.1'
+
+    // General Utilities
+    commons_collections_version = "3.2.2"
+    commons_lang_version = "2.6"
+    commons_lang3_version = "3.3.2"
+    commons_cli_version = "1.6.0"
+    commons_codec_version = "1.16.0"
+    commons_configuration2_version = '2.11.0'
+    commons_beanutils_version = '1.9.4'
+    kstruct_gethostname4j_version = "1.0.0"
+    sun_activation_version = '1.2.0'
+    sun_mail_version = '1.6.2'
+    nashorn_core_version = '15.4'
+}
+
+configurations {
+    // We create a config just for the stripped jar
+    hadoopAuth
+}
+
+dependencies {
+    // Ranger Dependencies
+    implementation("org.apache.ranger:ranger-plugins-audit:${ranger_version}") {
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+    implementation("org.apache.ranger:ranger-plugins-common:${ranger_version}"){
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+    implementation ("org.apache.ranger:credentialbuilder:${ranger_version}"){
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+    implementation("org.apache.ranger:ranger-plugin-classloader:${ranger_version}"){
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+    implementation ("org.apache.ranger:ranger-plugins-cred:${ranger_version}"){
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+    implementation("org.apache.ranger:ugsync-util:${ranger_version}"){
+        exclude group: 'commons-logging', module: 'commons-logging'
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+
+    //Hadoop Dependencies
+    implementation  "org.apache.hadoop.thirdparty:hadoop-shaded-guava:${hadoop_shaded_guava_version}"
+    hadoopAuth "org.apache.hadoop:hadoop-auth:${hadoop_version}"
+    implementation "org.apache.hadoop:hadoop-common:${hadoop_version}"
+
+    // Logging Dependencies
+    implementation "org.slf4j:slf4j-api:${slf4j_api_version}"
+    compileOnly  "org.apache.logging.log4j:log4j-api:${log4j_version}"
+    implementation "commons-logging:commons-logging:${commons_logging_version}"
+
+    // XML, JSON, and REST API Dependencies
+    implementation "com.sun.activation:javax.activation:${sun_activation_version}"
+    compileOnly "com.fasterxml.jackson.core:jackson-core:${fasterxml_jackson_version}"
+    implementation "com.fasterxml.jackson.core:jackson-databind:${fasterxml_jackson_version}"
+    implementation "com.fasterxml.jackson.core:jackson-annotations:${fasterxml_jackson_version}"
+    implementation "com.fasterxml.woodstox:woodstox-core:${fasterxml_woodstox_version}"
+    implementation "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:${fasterxml_jackson_version}"
+    implementation "com.fasterxml.jackson.jaxrs:jackson-jaxrs-base:${fasterxml_jackson_version}"
+    implementation "com.sun.mail:javax.mail:${sun_mail_version}"
+    implementation "javax.xml.bind:jaxb-api:${jaxb_api_version}"
+    implementation "com.sun.xml.bind:jaxb-impl:${jaxb_impl_version}"
+    implementation "org.codehaus.woodstox:stax2-api:${codehaus_woodstox_stax2api_version}"
+    implementation "com.sun.jersey:jersey-client:${jersey_bundle_version}"
+    implementation "com.sun.jersey:jersey-core:${jersey_bundle_version}"
+    implementation "com.sun.jersey:jersey-json:${jersey_bundle_version}"
+    implementation "com.sun.jersey:jersey-server:${jersey_bundle_version}"
+    implementation "javax.ws.rs:javax.ws.rs-api:${javax_ws_rs_version}"
+    compileOnly "com.google.code.gson:gson:${gson_version}"
+    implementation "org.codehaus.jettison:jettison:${jettison_version}"
+
+    // General Utilities
+    implementation "commons-collections:commons-collections:${commons_collections_version}"
+    implementation "commons-lang:commons-lang:${commons_lang_version}"
+    implementation "com.kstruct:gethostname4j:${kstruct_gethostname4j_version}"
+    implementation "org.apache.commons:commons-configuration2:${commons_configuration2_version}"
+
+    implementation "org.apache.commons:commons-lang3:${commons_lang3_version}"
+
+    //Solr Dependencies
+    implementation "org.apache.solr:solr-solrj:${solr_version}"
+    implementation "org.apache.solr:solr-api:${solr_version}"
+
+    // HTTP Components
+    implementation "org.eclipse.jetty:jetty-client:${jetty_client_version}"
+    implementation "org.apache.httpcomponents:httpasyncclient:${httpcomponents_httpasyncclient_version}"
+    implementation "org.apache.httpcomponents:httpclient:${httpcomponents_httpclient_version}"
+    implementation "org.apache.httpcomponents:httpcore:${httpcomponents_httpcore_version}"
+    implementation "org.apache.httpcomponents:httpcore-nio:${httpcomponents_httpcore_version}"
+    implementation "org.apache.httpcomponents:httpmime:${httpcomponents_httpmime_version}"
+
+    // Dependencies to be Shaded
+    compileOnly "org.openjdk.nashorn:nashorn-core:${nashorn_core_version}"
+    compileOnly "xerces:xercesImpl:${xerces_impl_version}"
+}
+
+
+tasks.named('test', Test) {
+    def filteredClasspath = configurations.testRuntimeClasspath.filter { file ->
+        !file.name.startsWith(project.name)
+    }
+    classpath = sourceSets.main.output + sourceSets.test.output + filteredClasspath
+}
+
+configurations.all {
+    resolutionStrategy {
+        // Logging
+        force 'org.apache.logging.log4j:log4j-api:2.21.0'
+        force 'org.slf4j:slf4j-api:2.0.13'
+        force 'commons-logging:commons-logging:1.3.4'
+        force 'ch.qos.reload4j:reload4j:1.2.22'
+
+        // HTTP, Netty, & Jetty
+        force 'org.apache.httpcomponents:httpclient:4.5.14'
+        force 'org.apache.httpcomponents:httpcore:4.4.16'
+        force 'org.apache.httpcomponents:httpcore-nio:4.4.16'
+
+        // Commons Utilities
+        force 'commons-codec:commons-codec:1.16.1'
+
+        // Miscellaneous
+        force 'com.nimbusds:nimbus-jose-jwt:9.31'
+    }
+}
+
+tasks.named('dependencyLicenses') {
+    enabled = false
+}
+
+tasks.named("thirdPartyAudit") {
+    enabled = false
+}
+
+gradle.projectsEvaluated {
+    println "Available configurations: " + configurations.names
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+configurations {
+    testRuntimeOnly {
+        // Exclude hadoop-auth from the test runtime
+        exclude group: 'org.apache.hadoop', module: 'hadoop-auth'
+
+        // Exclude hadoop-common from the test runtime
+        exclude group: 'org.apache.hadoop', module: 'hadoop-common'
+    }
+}
+
+// Add the plugin-security.policy in jvm.options of test cluster.
+def clusterName = "yamlRestTest"
+
+tasks.named("yamlRestTest").configure {
+    doFirst {
+        def jvmOptionsFile = file("${projectDir}/build/testclusters/${clusterName}-0/config/jvm.options")
+        if (!jvmOptionsFile.exists()) {
+            throw new GradleException("Expected jvm.options not found: ${jvmOptionsFile}")
+        }
+
+        println "Patching jvm.options at ${jvmOptionsFile}"
+
+        jvmOptionsFile.append("""
+-Djava.security.policy=${projectDir}/src/main/plugin-metadata/plugin-security.policy
+--add-opens=java.base/java.lang=ALL-UNNAMED
+--add-opens=java.base/java.net=ALL-UNNAMED
+""")
+    }
+}
+
+tasks.named("bundlePlugin").configure {
+    from("config") {
+        into "config"
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(tasks.named("hadoopAuthStripped")) {
+        into ""
+    }
+
+    // Copy runtimeClasspath but skip the original hadoop-auth jar
+    from(configurations.runtimeClasspath) {
+        into ""
+        exclude("hadoop-auth-*.jar")
+    }
+}
+
+tasks.register('hadoopAuthStripped', Jar) {
+    archiveBaseName.set("hadoop-auth")
+    archiveVersion.set("3.4.0-stripped")
+
+    // allow duplicates but skip extras
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // pick only the actual hadoop-auth jar (not sources, poms, etc.)
+    def hadoopAuthJar = configurations.hadoopAuth
+            .files
+            .find { it.name.startsWith("hadoop-auth-") && it.name.endsWith(".jar") }
+
+    if (hadoopAuthJar == null) {
+        throw new GradleException("Could not find hadoop-auth jar in configuration")
+    }
+
+    from {
+        zipTree(hadoopAuthJar)
+    }
+
+    // remove duplicate problematic class
+    exclude("org/apache/hadoop/security/authentication/server/package-info.class")
+}
